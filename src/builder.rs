@@ -21,7 +21,7 @@ pub struct Builder<I, R, A, T, B, C, IST> {
 
 impl<I, R, A, T, B, C, IST> Builder<I, R, A, T, B, C, IST>
 where
-    I: Fn(ReadHalf<C>, Arc<Actor<TCPPeer<C>>>, T) -> R + Send + Sync + 'static,
+    I: Fn(ReadHalf<C>, Arc<TCPPeer<C>>, T) -> R + Send + Sync + 'static,
     R: Future<Output = Result<()>> + Send + 'static,
     A: ToSocketAddrs,
     T: Clone + Send + 'static,

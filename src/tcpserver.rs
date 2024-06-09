@@ -1,5 +1,4 @@
 use crate::peer::TCPPeer;
-use crate::IPeer;
 use anyhow::{bail, Result};
 use aqueue::Actor;
 use log::*;
@@ -30,7 +29,7 @@ unsafe impl<I, R, T, B, C, IST> Sync for TCPServer<I, R, T, B, C, IST> {}
 
 impl<I, R, T, B, C, IST> TCPServer<I, R, T, B, C, IST>
 where
-    I: Fn(ReadHalf<C>, Arc<Actor<TCPPeer<C>>>, T) -> R + Send + Sync + 'static,
+    I: Fn(ReadHalf<C>, Arc<TCPPeer<C>>, T) -> R + Send + Sync + 'static,
     R: Future<Output = Result<()>> + Send + 'static,
     T: Clone + Send + 'static,
     B: Future<Output = Result<C>> + Send + 'static,
@@ -114,7 +113,7 @@ pub trait ITCPServer<T> {
 #[async_trait::async_trait]
 impl<I, R, T, B, C, IST> ITCPServer<T> for Actor<TCPServer<I, R, T, B, C, IST>>
 where
-    I: Fn(ReadHalf<C>, Arc<Actor<TCPPeer<C>>>, T) -> R + Send + Sync + 'static,
+    I: Fn(ReadHalf<C>, Arc<TCPPeer<C>>, T) -> R + Send + Sync + 'static,
     R: Future<Output = Result<()>> + Send + 'static,
     T: Clone + Send + Sync + 'static,
     B: Future<Output = Result<C>> + Send + 'static,

@@ -5,7 +5,7 @@ use openssl::ssl::{Ssl, SslAcceptor, SslFiletype, SslMethod, SslVerifyMode};
 use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
-use tcpserver::{Builder, IPeer, ITCPServer};
+use tcp_channel_server::{Builder, ITCPServer};
 use tokio::io::AsyncReadExt;
 use tokio::time::sleep;
 use tokio_openssl::SslStream;
@@ -62,7 +62,7 @@ async fn main() -> Result<()> {
                     break;
                 }
                 println!("{}", std::str::from_utf8(&buff[..len])?);
-                peer.send_ref(b"200\r\n").await?;
+                peer.send(b"200\r\n".to_vec()).await?;
             }
             println!("{:?} disconnect", peer.addr());
             Ok(())

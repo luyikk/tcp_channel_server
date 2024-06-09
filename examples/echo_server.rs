@@ -1,6 +1,6 @@
 use anyhow::Result;
 use std::sync::Arc;
-use tcpserver::{Builder, IPeer, ITCPServer};
+use tcp_channel_server::{Builder, ITCPServer};
 use tokio::io::AsyncReadExt;
 
 #[tokio::main]
