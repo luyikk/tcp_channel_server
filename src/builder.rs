@@ -21,12 +21,12 @@ pub struct Builder<I, R, A, T, B, C, IST> {
 
 impl<I, R, A, T, B, C, IST> Builder<I, R, A, T, B, C, IST>
 where
-    I: Fn(ReadHalf<C>, Arc<TCPPeer<C>>, T) -> R + Send + Sync + 'static,
+    I: Fn(ReadHalf<C>, Arc<TCPPeer<C>>, T) -> R + Send + Sync + Clone + 'static,
     R: Future<Output = Result<()>> + Send + 'static,
     A: ToSocketAddrs,
     T: Clone + Send + 'static,
     B: Future<Output = Result<C>> + Send + 'static,
-    C: AsyncRead + AsyncWrite + Send + 'static,
+    C: AsyncRead + AsyncWrite + Send + Sync + 'static,
     IST: Fn(TcpStream) -> B + Send + Sync + 'static,
 {
     pub fn new(addr: A) -> Builder<I, R, A, T, B, C, IST> {

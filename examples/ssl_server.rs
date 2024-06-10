@@ -20,6 +20,7 @@ lazy_static! {
         acceptor
             .set_certificate_chain_file("tests/server-cert.pem")
             .unwrap();
+
         acceptor.set_verify_callback(
             SslVerifyMode::PEER | SslVerifyMode::FAIL_IF_NO_PEER_CERT,
             |ok, cert| {

@@ -17,7 +17,7 @@ pub struct TCPServer<I, R, T, B, C, IST> {
     listener: Option<TcpListener>,
     connect_event: Option<ConnectEventType>,
     stream_init: Arc<IST>,
-    input_event: Arc<I>,
+    input_event: Option<I>,
     _phantom1: PhantomData<R>,
     _phantom2: PhantomData<T>,
     _phantom3: PhantomData<C>,
@@ -29,11 +29,11 @@ unsafe impl<I, R, T, B, C, IST> Sync for TCPServer<I, R, T, B, C, IST> {}
 
 impl<I, R, T, B, C, IST> TCPServer<I, R, T, B, C, IST>
 where
-    I: Fn(ReadHalf<C>, Arc<TCPPeer<C>>, T) -> R + Send + Sync + 'static,
+    I: Fn(ReadHalf<C>, Arc<TCPPeer<C>>, T) -> R + Send + Clone + 'static,
     R: Future<Output = Result<()>> + Send + 'static,
     T: Clone + Send + 'static,
     B: Future<Output = Result<C>> + Send + 'static,
-    C: AsyncRead + AsyncWrite + Send + 'static,
+    C: AsyncRead + AsyncWrite + Send + Sync + 'static,
     IST: Fn(TcpStream) -> B + Send + Sync + 'static,
 {
     /// 创建一个新的TCP服务
@@ -48,7 +48,7 @@ where
             listener: Some(listener),
             connect_event,
             stream_init: Arc::new(stream_init),
-            input_event: Arc::new(input),
+            input_event: Some(input),
             _phantom1: Default::default(),
             _phantom2: Default::default(),
             _phantom3: Default::default(),
@@ -60,7 +60,7 @@ where
     pub async fn start(&mut self, token: T) -> Result<JoinHandle<Result<()>>> {
         if let Some(listener) = self.listener.take() {
             let connect_event = self.connect_event.take();
-            let input_event = self.input_event.clone();
+            let input_event = self.input_event.take().unwrap();
             let stream_init = self.stream_init.clone();
             let join: JoinHandle<Result<()>> = tokio::spawn(async move {
                 loop {
@@ -80,7 +80,7 @@ where
                             Ok(socket) => {
                                 let (reader, sender) = tokio::io::split(socket);
                                 let peer = TCPPeer::new(addr, sender);
-                                if let Err(err) = (*input)(reader, peer.clone(), peer_token).await {
+                                if let Err(err) = input(reader, peer.clone(), peer_token).await {
                                     error!("input data error:{}", err);
                                 }
                                 if let Err(er) = peer.disconnect().await {
@@ -113,11 +113,11 @@ pub trait ITCPServer<T> {
 #[async_trait::async_trait]
 impl<I, R, T, B, C, IST> ITCPServer<T> for Actor<TCPServer<I, R, T, B, C, IST>>
 where
-    I: Fn(ReadHalf<C>, Arc<TCPPeer<C>>, T) -> R + Send + Sync + 'static,
+    I: Fn(ReadHalf<C>, Arc<TCPPeer<C>>, T) -> R + Send + Sync + Clone + 'static,
     R: Future<Output = Result<()>> + Send + 'static,
     T: Clone + Send + Sync + 'static,
     B: Future<Output = Result<C>> + Send + 'static,
-    C: AsyncRead + AsyncWrite + Send + 'static,
+    C: AsyncRead + AsyncWrite + Send + Sync + 'static,
     IST: Fn(TcpStream) -> B + Send + Sync + 'static,
 {
     async fn start(&self, token: T) -> Result<JoinHandle<Result<()>>> {

@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Result};
-use openssl::ssl::{SslConnector, SslFiletype, SslMethod};
+use openssl::ssl::{SslConnector, SslFiletype, SslMethod, SslVerifyMode};
 use std::pin::Pin;
 use tcpclient::SocketClientTrait;
 use tokio::io::AsyncReadExt;
@@ -14,6 +14,7 @@ async fn main() -> Result<()> {
         "127.0.0.1:5555",
         |tcp_stream| async move {
             let mut connector = SslConnector::builder(SslMethod::tls())?;
+            connector.set_verify(SslVerifyMode::PEER);
             connector.set_ca_file("tests/chain.cert.pem")?;
             connector.set_private_key_file("tests/client-key.pem", SslFiletype::PEM)?;
             connector.set_certificate_chain_file("tests/client-cert.pem")?;

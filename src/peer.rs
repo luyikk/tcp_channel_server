@@ -21,9 +21,6 @@ pub struct TCPPeer<T> {
     _ph: PhantomData<T>,
 }
 
-unsafe impl<T: Send> Send for TCPPeer<T> {}
-
-unsafe impl<T: Send> Sync for TCPPeer<T> {}
 impl<T> TCPPeer<T>
 where
     T: AsyncRead + AsyncWrite + Send + 'static,
