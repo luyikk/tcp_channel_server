@@ -1,6 +1,6 @@
 [package]
 name = "tcp-channel-server"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2021"
 license = "MIT/Apache-2.0"
 readme = "README.md"
@@ -22,6 +22,7 @@ async-channel = "2"
 openssl = { version = "0.10", optional = true }
 openssl-sys = { version = "0.9", optional = true }
 tokio-openssl = { version = "0.6", optional = true }
+thiserror = "2"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }

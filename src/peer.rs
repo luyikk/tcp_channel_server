@@ -1,5 +1,6 @@
-use anyhow::{bail, Result};
+use crate::error::Result;
 use async_channel::Sender;
+use std::io::ErrorKind;
 use std::marker::PhantomData;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -70,7 +71,7 @@ where
     /// ipaddress
     #[inline]
     pub fn addr(&self) -> SocketAddr {
-        self.addr.clone()
+        self.addr
     }
 
     /// 是否断线
@@ -85,7 +86,7 @@ where
         if !self.disconnect.load(Ordering::Acquire) {
             Ok(self.sender.clone().send(State::Send(buff)).await?)
         } else {
-            bail!("Send Error,Disconnect")
+            Err(std::io::Error::from(ErrorKind::ConnectionReset).into())
         }
     }
 
@@ -95,7 +96,7 @@ where
         if !self.disconnect.load(Ordering::Acquire) {
             Ok(self.sender.clone().send(State::SendFlush(buff)).await?)
         } else {
-            bail!("Send Error,Disconnect")
+            Err(std::io::Error::from(ErrorKind::ConnectionReset).into())
         }
     }
 
@@ -105,7 +106,7 @@ where
         if !self.disconnect.load(Ordering::Acquire) {
             Ok(self.sender.send(State::Flush).await?)
         } else {
-            bail!("Send Error,Disconnect")
+            Err(std::io::Error::from(ErrorKind::ConnectionReset).into())
         }
     }
 
