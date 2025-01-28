@@ -65,41 +65,61 @@ where
             let join: JoinHandle<anyhow::Result<()>> = tokio::spawn(async move {
                 loop {
                     let (socket, addr) = listener.accept().await?;
-                    if let Some(ref connect_event) = connect_event {
-                        if !connect_event(addr) {
-                            warn!("addr:{} not connect", addr);
-                            continue;
-                        }
+                    if connect_event.map_or(true, |event| event(addr)) {
+                        trace!("start read:{}", addr);
+                        let input = input_event.clone();
+                        let peer_token = token.clone();
+                        let stream_init = stream_init.clone();
+                        tokio::spawn(handle_connection(
+                            socket,
+                            addr,
+                            input,
+                            peer_token,
+                            stream_init,
+                        ));
+                    } else {
+                        warn!("addr:{} not connect", addr);
                     }
-                    trace!("start read:{}", addr);
-                    let input = input_event.clone();
-                    let peer_token = token.clone();
-                    let stream_init = stream_init.clone();
-                    tokio::spawn(async move {
-                        match (*stream_init)(socket).await {
-                            Ok(socket) => {
-                                let (reader, sender) = tokio::io::split(socket);
-                                let peer = TCPPeer::new(addr, sender);
-                                if let Err(err) = input(reader, peer.clone(), peer_token).await {
-                                    error!("input data error:{}", err);
-                                }
-                                if let Err(er) = peer.disconnect().await {
-                                    debug!("disconnect client:{:?} err:{}", peer.addr(), er);
-                                } else {
-                                    debug!("{} disconnect", peer.addr())
-                                }
-                            }
-                            Err(err) => {
-                                warn!("init stream err:{}", err);
-                            }
-                        }
-                    });
                 }
             });
 
             Ok(join)
         } else {
             Err(crate::error::Error::NotListenerError)
+        }
+    }
+}
+
+#[inline]
+async fn handle_connection<I, R, T, B, C, IST>(
+    socket: TcpStream,
+    addr: SocketAddr,
+    input: I,
+    token: T,
+    stream_init: Arc<IST>,
+) where
+    I: Fn(ReadHalf<C>, Arc<TCPPeer<C>>, T) -> R + Send + Clone + 'static,
+    R: Future<Output = anyhow::Result<()>> + Send + 'static,
+    T: Clone + Send + 'static,
+    B: Future<Output = anyhow::Result<C>> + Send + 'static,
+    C: AsyncRead + AsyncWrite + Send + Sync + 'static,
+    IST: Fn(TcpStream) -> B + Send + Sync + 'static,
+{
+    match (*stream_init)(socket).await {
+        Ok(socket) => {
+            let (reader, sender) = tokio::io::split(socket);
+            let peer = TCPPeer::new(addr, sender);
+            if let Err(err) = input(reader, peer.clone(), token).await {
+                error!("input data error:{}", err);
+            }
+            if let Err(er) = peer.disconnect().await {
+                debug!("disconnect client:{:?} err:{}", peer.addr(), er);
+            } else {
+                debug!("{} disconnect", peer.addr())
+            }
+        }
+        Err(err) => {
+            warn!("init stream err:{}", err);
         }
     }
 }
