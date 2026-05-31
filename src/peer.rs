@@ -36,28 +36,30 @@ where
                 match state {
                     State::Disconnect => {
                         let _ = sender.shutdown().await;
-                        return;
+                        break;
                     }
                     State::Send(data) => {
-                        if sender.write(&data).await.is_err() {
-                            return;
+                        if sender.write_all(&data).await.is_err() {
+                            break;
                         }
                     }
                     State::SendFlush(data) => {
-                        if sender.write(&data).await.is_err() {
-                            return;
+                        if sender.write_all(&data).await.is_err() {
+                            break;
                         }
                         if sender.flush().await.is_err() {
-                            return;
+                            break;
                         }
                     }
                     State::Flush => {
                         if sender.flush().await.is_err() {
-                            return;
+                            break;
                         }
                     }
                 }
             }
+
+            log::debug!("TCPPeer sender task ended for {}", addr);
         });
 
         Arc::new(TCPPeer {
@@ -84,7 +86,7 @@ where
     #[inline]
     pub async fn send(&self, buff: Vec<u8>) -> Result<()> {
         if !self.disconnect.load(Ordering::Acquire) {
-            Ok(self.sender.clone().send(State::Send(buff)).await?)
+            Ok(self.sender.send(State::Send(buff)).await?)
         } else {
             Err(std::io::Error::from(ErrorKind::ConnectionReset).into())
         }
@@ -94,7 +96,7 @@ where
     #[inline]
     pub async fn send_all(&self, buff: Vec<u8>) -> Result<()> {
         if !self.disconnect.load(Ordering::Acquire) {
-            Ok(self.sender.clone().send(State::SendFlush(buff)).await?)
+            Ok(self.sender.send(State::SendFlush(buff)).await?)
         } else {
             Err(std::io::Error::from(ErrorKind::ConnectionReset).into())
         }

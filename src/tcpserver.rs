@@ -2,7 +2,6 @@ use crate::error::Result;
 use crate::peer::TCPPeer;
 use aqueue::Actor;
 use log::*;
-use std::error::Error;
 use std::future::Future;
 use std::marker::PhantomData;
 use std::net::SocketAddr;
@@ -42,17 +41,17 @@ where
         stream_init: IST,
         input: I,
         connect_event: Option<ConnectEventType>,
-    ) -> Result<Arc<Actor<TCPServer<I, R, T, B, C, IST>>>, Box<dyn Error>> {
+    ) -> anyhow::Result<Arc<Actor<TCPServer<I, R, T, B, C, IST>>>> {
         let listener = TcpListener::bind(addr).await?;
         Ok(Arc::new(Actor::new(TCPServer {
             listener: Some(listener),
             connect_event,
             stream_init: Arc::new(stream_init),
             input_event: Some(input),
-            _phantom1: Default::default(),
-            _phantom2: Default::default(),
-            _phantom3: Default::default(),
-            _phantom4: Default::default(),
+            _phantom1: PhantomData,
+            _phantom2: PhantomData,
+            _phantom3: PhantomData,
+            _phantom4: PhantomData,
         })))
     }
 
@@ -65,7 +64,7 @@ where
             let join: JoinHandle<anyhow::Result<()>> = tokio::spawn(async move {
                 loop {
                     let (socket, addr) = listener.accept().await?;
-                    if connect_event.map_or(true, |event| event(addr)) {
+                    if connect_event.is_none_or(|event| event(addr)) {
                         trace!("start read:{}", addr);
                         let input = input_event.clone();
                         let peer_token = token.clone();

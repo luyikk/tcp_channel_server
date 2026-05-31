@@ -34,10 +34,10 @@ where
             connect_event: None,
             stream_init: None,
             addr,
-            _phantom1: Default::default(),
-            _phantom2: Default::default(),
-            _phantom3: Default::default(),
-            _phantom4: Default::default(),
+            _phantom1: PhantomData,
+            _phantom2: PhantomData,
+            _phantom3: PhantomData,
+            _phantom4: PhantomData,
         }
     }
 
@@ -61,20 +61,15 @@ where
 
     /// 生成TCPSERVER,如果没有设置 tcp input 将报错
     pub async fn build(mut self) -> Arc<Actor<TCPServer<I, R, T, B, C, IST>>> {
-        if let Some(input) = self.input.take() {
-            if let Some(stream_init) = self.stream_init.take() {
-                return if let Some(connect) = self.connect_event.take() {
-                    TCPServer::new(self.addr, stream_init, input, Some(connect))
-                        .await
-                        .unwrap()
-                } else {
-                    TCPServer::new(self.addr, stream_init, input, None)
-                        .await
-                        .unwrap()
-                };
-            }
-            panic!("stream_init is no settings,please use set_stream_init function.");
-        }
-        panic!("input event is no settings,please use set_input_event function set input event.");
+        let input = self.input.take().expect(
+            "input event is no settings,please use set_input_event function set input event.",
+        );
+        let stream_init = self
+            .stream_init
+            .take()
+            .expect("stream_init is no settings,please use set_stream_init function.");
+        TCPServer::new(self.addr, stream_init, input, self.connect_event.take())
+            .await
+            .unwrap()
     }
 }
