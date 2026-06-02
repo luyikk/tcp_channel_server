@@ -9,6 +9,8 @@ pub enum Error {
     JoinError(#[from] tokio::task::JoinError),
     #[error(transparent)]
     SendError(#[from] async_channel::SendError<State>),
+    #[error("{0}")]
+    ChannelError(String),
     #[error("not listener or repeat start")]
     NotListenerError,
 }

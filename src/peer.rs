@@ -1,5 +1,5 @@
-use crate::error::Result;
-use async_channel::Sender;
+use crate::error::{Error, Result};
+use async_channel::{Sender, TrySendError};
 use std::io::ErrorKind;
 use std::marker::PhantomData;
 use std::net::SocketAddr;
@@ -76,39 +76,53 @@ where
         self.addr
     }
 
+    /// 检查连接是否已断开。
+    #[inline]
+    fn check_disconnected(&self) -> Result<()> {
+        if self.is_disconnect() {
+            Err(std::io::Error::from(ErrorKind::ConnectionReset).into())
+        } else {
+            Ok(())
+        }
+    }
+
     /// 是否断线
     #[inline]
     pub fn is_disconnect(&self) -> bool {
-        self.disconnect.load(Ordering::Acquire)
+        self.disconnect.load(Ordering::Relaxed)
     }
 
     /// 发送
     #[inline]
     pub async fn send(&self, buff: Vec<u8>) -> Result<()> {
-        if !self.disconnect.load(Ordering::Acquire) {
-            Ok(self.sender.send(State::Send(buff)).await?)
-        } else {
-            Err(std::io::Error::from(ErrorKind::ConnectionReset).into())
+        self.check_disconnected()?;
+        match self.sender.try_send(State::Send(buff)) {
+            Ok(()) => Ok(()),
+            Err(TrySendError::Full(state)) => Ok(self.sender.send(state).await?),
+            Err(TrySendError::Closed(_)) => Err(Error::ChannelError("channel closed".to_string())),
         }
     }
 
     /// 发送全部
     #[inline]
     pub async fn send_all(&self, buff: Vec<u8>) -> Result<()> {
-        if !self.disconnect.load(Ordering::Acquire) {
-            Ok(self.sender.send(State::SendFlush(buff)).await?)
-        } else {
-            Err(std::io::Error::from(ErrorKind::ConnectionReset).into())
+        self.check_disconnected()?;
+
+        match self.sender.try_send(State::SendFlush(buff)) {
+            Ok(()) => Ok(()),
+            Err(TrySendError::Full(state)) => Ok(self.sender.send(state).await?),
+            Err(TrySendError::Closed(_)) => Err(Error::ChannelError("channel closed".to_string())),
         }
     }
 
     /// flush
     #[inline]
     pub async fn flush(&self) -> Result<()> {
-        if !self.disconnect.load(Ordering::Acquire) {
-            Ok(self.sender.send(State::Flush).await?)
-        } else {
-            Err(std::io::Error::from(ErrorKind::ConnectionReset).into())
+        self.check_disconnected()?;
+        match self.sender.try_send(State::Flush) {
+            Ok(()) => Ok(()),
+            Err(TrySendError::Full(_)) => Ok(self.sender.send(State::Flush).await?),
+            Err(TrySendError::Closed(_)) => Err(Error::ChannelError("channel closed".to_string())),
         }
     }
 
