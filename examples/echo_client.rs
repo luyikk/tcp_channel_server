@@ -12,7 +12,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     // connect echo server
     let client = TcpClient::connect(
-        "127.0.0.1:5555",
+        "127.0.0.1:6666",
         |_, client, mut reader| async move {
             // read buff from target server
             let mut buff = [0; 7];

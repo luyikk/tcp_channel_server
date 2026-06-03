@@ -10,7 +10,7 @@ async fn main() -> Result<()> {
         .filter_level(LevelFilter::Trace)
         .init();
 
-    let tcpserver: Arc<dyn ITCPServer<()>> = Builder::new("0.0.0.0:5555")
+    let tcpserver: Arc<dyn ITCPServer<()>> = Builder::new("0.0.0.0:6666")
         .set_connect_event(|addr| {
             println!("{:?} connect", addr);
             true
