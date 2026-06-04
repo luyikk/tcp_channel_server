@@ -1,6 +1,6 @@
 [package]
 name = "tcp-channel-server"
-version = "0.3.1"
+version = "0.3.2"
 edition = "2021"
 license = "MIT/Apache-2.0"
 readme = "README.md"
@@ -13,7 +13,7 @@ default = []
 tls = ["openssl", "openssl-sys", "tokio-openssl"]
 
 [dependencies]
-tokio = { version = "1", features = ["rt", "net", "io-util"] }
+tokio = { version = "1", features = ["rt", "net", "io-util","sync"] }
 log = "0.4"
 aqueue = "1.3"
 async-trait = "0.1"
@@ -29,3 +29,4 @@ tokio = { version = "1", features = ["full"] }
 lazy_static = "1.4"
 env_logger = "0"
 tcpclient = "2"
+socket2 = "0.6"

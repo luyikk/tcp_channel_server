@@ -1,7 +1,9 @@
 use anyhow::Result;
 use log::LevelFilter;
+use socket2::{Domain, Type};
+use std::net::SocketAddr;
 use std::sync::Arc;
-use tcp_channel_server::{Builder, ITCPServer};
+use tcp_channel_server::{FromStdBuilder, ITCPServer};
 use tokio::io::AsyncReadExt;
 
 #[tokio::main]
@@ -10,7 +12,13 @@ async fn main() -> Result<()> {
         .filter_level(LevelFilter::Trace)
         .init();
 
-    let tcpserver: Arc<dyn ITCPServer<()>> = Builder::new("0.0.0.0:5555")
+    let listener = socket2::Socket::new(Domain::IPV4, Type::STREAM, None)?;
+    listener.set_reuse_address(true)?;
+    let address: SocketAddr = "0.0.0.0:5555".parse()?;
+    listener.bind(&address.into())?;
+    listener.listen(128)?;
+
+    let tcpserver: Arc<dyn ITCPServer<()>> = FromStdBuilder::new(listener.into())
         .set_connect_event(|addr| {
             println!("{:?} connect", addr);
             true

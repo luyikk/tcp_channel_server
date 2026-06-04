@@ -8,19 +8,22 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::io::{AsyncRead, AsyncWrite, ReadHalf};
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
+use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
 
 pub type ConnectEventType = fn(SocketAddr) -> bool;
+
+/// Type alias for an `Arc<Actor<TCPServer<...>>>`.
+pub type TCPServerHandle<I, R, T, B, C, IST> = Arc<Actor<TCPServer<I, R, T, B, C, IST>>>;
 
 pub struct TCPServer<I, R, T, B, C, IST> {
     listener: Option<TcpListener>,
     connect_event: Option<ConnectEventType>,
     stream_init: Arc<IST>,
     input_event: Option<I>,
-    _phantom1: PhantomData<R>,
-    _phantom2: PhantomData<T>,
-    _phantom3: PhantomData<C>,
-    _phantom4: PhantomData<B>,
+    nodelay: bool,
+    max_connections: usize,
+    _phantom: PhantomData<(R, T, C, B)>,
 }
 
 unsafe impl<I, R, T, B, C, IST> Send for TCPServer<I, R, T, B, C, IST> {}
@@ -41,17 +44,40 @@ where
         stream_init: IST,
         input: I,
         connect_event: Option<ConnectEventType>,
-    ) -> anyhow::Result<Arc<Actor<TCPServer<I, R, T, B, C, IST>>>> {
+        nodelay: bool,
+        max_connections: usize,
+    ) -> anyhow::Result<TCPServerHandle<I, R, T, B, C, IST>> {
         let listener = TcpListener::bind(addr).await?;
         Ok(Arc::new(Actor::new(TCPServer {
             listener: Some(listener),
             connect_event,
             stream_init: Arc::new(stream_init),
             input_event: Some(input),
-            _phantom1: PhantomData,
-            _phantom2: PhantomData,
-            _phantom3: PhantomData,
-            _phantom4: PhantomData,
+            nodelay,
+            max_connections,
+            _phantom: PhantomData,
+        })))
+    }
+
+    /// Create a TCP server from an existing `std::net::TcpListener`.
+    pub(crate) async fn from_std(
+        listener: std::net::TcpListener,
+        stream_init: IST,
+        input: I,
+        connect_event: Option<ConnectEventType>,
+        nodelay: bool,
+        max_connections: usize,
+    ) -> anyhow::Result<TCPServerHandle<I, R, T, B, C, IST>> {
+        listener.set_nonblocking(true)?;
+        let listener = TcpListener::from_std(listener)?;
+        Ok(Arc::new(Actor::new(TCPServer {
+            listener: Some(listener),
+            connect_event,
+            stream_init: Arc::new(stream_init),
+            input_event: Some(input),
+            nodelay,
+            max_connections,
+            _phantom: PhantomData,
         })))
     }
 
@@ -61,9 +87,28 @@ where
             let connect_event = self.connect_event.take();
             let input_event = self.input_event.take().unwrap();
             let stream_init = self.stream_init.clone();
+            let nodelay = self.nodelay;
+            let semaphore = if self.max_connections > 0 {
+                Some(Arc::new(Semaphore::new(self.max_connections)))
+            } else {
+                None
+            };
             let join: JoinHandle<anyhow::Result<()>> = tokio::spawn(async move {
                 loop {
+                    let permit = match &semaphore {
+                        Some(s) => Some(
+                            s.clone()
+                                .acquire_owned()
+                                .await
+                                .expect("semaphore closed unexpectedly"),
+                        ),
+                        None => None,
+                    };
+
                     let (socket, addr) = listener.accept().await?;
+                    if nodelay {
+                        socket.set_nodelay(true)?;
+                    }
                     if connect_event.is_none_or(|event| event(addr)) {
                         trace!("start read:{}", addr);
                         let input = input_event.clone();
@@ -75,6 +120,7 @@ where
                             input,
                             peer_token,
                             stream_init,
+                            permit,
                         ));
                     } else {
                         warn!("addr:{} not connect", addr);
@@ -96,6 +142,7 @@ async fn handle_connection<I, R, T, B, C, IST>(
     input: I,
     token: T,
     stream_init: Arc<IST>,
+    permit: Option<tokio::sync::OwnedSemaphorePermit>,
 ) where
     I: Fn(ReadHalf<C>, Arc<TCPPeer<C>>, T) -> R + Send + Clone + 'static,
     R: Future<Output = anyhow::Result<()>> + Send + 'static,
@@ -104,6 +151,7 @@ async fn handle_connection<I, R, T, B, C, IST>(
     C: AsyncRead + AsyncWrite + Send + Sync + 'static,
     IST: Fn(TcpStream) -> B + Send + Sync + 'static,
 {
+    let _permit = permit;
     match (*stream_init)(socket).await {
         Ok(socket) => {
             let (reader, sender) = tokio::io::split(socket);

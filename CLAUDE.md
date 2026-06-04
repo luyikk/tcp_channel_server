@@ -67,3 +67,6 @@ Gates `openssl`, `openssl-sys`, and `tokio-openssl`. When enabled, `stream_init`
 ### Crate versioning note
 
 The README examples use version `"0.2"` but the current crate is `0.3.1`. The API is the same; the version bump added the `thiserror`-based error enum.
+
+## README.md
+Add bilingual instructions in English and Chinese, referring to: https://github.com/luyikk/rust_netx/blob/master/README.md
